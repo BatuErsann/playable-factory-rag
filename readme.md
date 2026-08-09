@@ -200,7 +200,7 @@ The production stack is defined in `docker-compose.production.yml`. It builds bo
 The production deployment uses two HTTPS subdomains under `batuhanersan.com.tr`:
 
 ```text
-web -> https://app.batuhanersan.com.tr
+web -> https://playable.batuhanersan.com.tr
 api -> https://api.batuhanersan.com.tr
 ```
 
@@ -226,7 +226,7 @@ NODE_ENV=production
 DATABASE_URL=postgresql://playable:<URL-encoded-database-password>@db:5432/playable_rag
 OPENAI_API_KEY=<OpenAI-API-key>
 JWT_SECRET=<long-random-JWT-secret>
-FRONTEND_URL=https://app.batuhanersan.com.tr
+FRONTEND_URL=https://playable.batuhanersan.com.tr
 COOKIE_SECURE=true
 COOKIE_SAME_SITE=lax
 CORPUS_PATH=/app/corpus
@@ -252,8 +252,8 @@ NEXT_PUBLIC_API_URL=https://api.batuhanersan.com.tr
 1. In Coolify, configure a GitHub App or deploy key with access only to the private repository.
 2. Create a new resource from that private repository and select the Docker Compose build pack.
 3. Set the Compose file to `/docker-compose.production.yml` and let Coolify load the three services.
-4. In DNS, point `app.batuhanersan.com.tr` and `api.batuhanersan.com.tr` to the Coolify server.
-5. Assign `https://app.batuhanersan.com.tr` to `web` on container port `3000` and `https://api.batuhanersan.com.tr` to `api` on container port `4000`.
+4. In DNS, point `playable.batuhanersan.com.tr` and `api.batuhanersan.com.tr` to the Coolify server.
+5. Assign `https://playable.batuhanersan.com.tr` to `web` on container port `3000` and `https://api.batuhanersan.com.tr` to `api` on container port `4000`.
 6. Set the production variables shown above. Do not use a wildcard for `FRONTEND_URL`.
 7. Deploy the stack and wait for Coolify to issue valid HTTPS certificates.
 8. Confirm that `https://api.batuhanersan.com.tr/health` returns `status: "ok"`.
@@ -262,7 +262,7 @@ The production Compose defaults already contain these hostnames, so URL discover
 
 ### Cookie behavior
 
-The web and API subdomains share the same parent site, so production uses `COOKIE_SAME_SITE=lax` with `COOKIE_SECURE=true`. Frontend requests still use `credentials: "include"`, CORS accepts only `https://app.batuhanersan.com.tr`, and the backend remains the authorization boundary.
+The web and API subdomains share the same parent site, so production uses `COOKIE_SAME_SITE=lax` with `COOKIE_SECURE=true`. Frontend requests still use `credentials: "include"`, CORS accepts only `https://playable.batuhanersan.com.tr`, and the backend remains the authorization boundary.
 
 ### Initialize and verify production data
 
