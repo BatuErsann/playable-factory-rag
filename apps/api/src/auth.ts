@@ -1,10 +1,19 @@
 import bcrypt from "bcryptjs";
-import { Router, type NextFunction, type Request, type Response } from "express";
+import {
+  Router,
+  type CookieOptions,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 
 import { db } from "./db.js";
 
 export type UserRole = "USER" | "ADMIN";
+
+const AUTH_COOKIE_NAME = "playable_factory_token";
+const AUTH_TOKEN_MAX_AGE_SECONDS = 24 * 60 * 60;
 
 type AuthenticatedUser = JwtPayload & {
   id: number;
@@ -37,6 +46,63 @@ const jwtSecret = (): string => {
   return secret;
 };
 
+function cookieSameSite(): CookieOptions["sameSite"] {
+  const value = process.env.COOKIE_SAME_SITE?.toLowerCase() ?? "lax";
+  if (value === "lax" || value === "strict" || value === "none") return value;
+  throw new Error("COOKIE_SAME_SITE must be lax, strict, or none");
+}
+
+function cookieIsSecure(): boolean {
+  if (process.env.NODE_ENV === "production") return true;
+  if (process.env.COOKIE_SECURE === "true") return true;
+  if (process.env.COOKIE_SECURE === "false") return false;
+  return false;
+}
+
+function authCookieOptions(): CookieOptions {
+  const sameSite = cookieSameSite();
+  const secure = cookieIsSecure();
+  if (sameSite === "none" && !secure) {
+    throw new Error("COOKIE_SAME_SITE=none requires a secure cookie");
+  }
+
+  const options: CookieOptions = {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: "/",
+  };
+
+  if (process.env.COOKIE_DOMAIN) options.domain = process.env.COOKIE_DOMAIN;
+  return options;
+}
+
+function readCookie(req: Request, name: string): string | undefined {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return undefined;
+
+  for (const cookie of cookieHeader.split(";")) {
+    const separatorIndex = cookie.indexOf("=");
+    if (separatorIndex < 0) continue;
+
+    const cookieName = cookie.slice(0, separatorIndex).trim();
+    if (cookieName !== name) continue;
+
+    try {
+      return decodeURIComponent(cookie.slice(separatorIndex + 1).trim());
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function readBearerToken(req: Request): string | undefined {
+  const authorization = req.header("authorization");
+  return authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+}
+
 function publicUser(user: UserRow) {
   return { id: user.id, username: user.username, email: user.email, role: user.role, createdAt: user.created_at };
 }
@@ -51,9 +117,9 @@ function isAuthenticatedUser(payload: string | JwtPayload): payload is Authentic
 }
 
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
-  const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+  const token = readCookie(req, AUTH_COOKIE_NAME) ?? readBearerToken(req);
   if (!token) {
-    res.status(401).json({ message: "Authorization token is required" });
+    res.status(401).json({ message: "Authentication token is required" });
     return;
   }
 
@@ -88,6 +154,11 @@ export function requireRole(...allowedRoles: UserRole[]) {
 }
 
 export const authRouter = Router();
+
+authRouter.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 
 authRouter.post("/register", async (req, res) => {
   const { username, email, password } = req.body as Record<string, unknown>;
@@ -140,12 +211,26 @@ authRouter.post("/login", async (req, res) => {
       return;
     }
 
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, jwtSecret(), { expiresIn: "24h" });
-    res.json({ token, user: publicUser(user) });
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      jwtSecret(),
+      { expiresIn: AUTH_TOKEN_MAX_AGE_SECONDS },
+    );
+
+    res.cookie(AUTH_COOKIE_NAME, token, {
+      ...authCookieOptions(),
+      maxAge: AUTH_TOKEN_MAX_AGE_SECONDS * 1000,
+    });
+    res.json({ user: publicUser(user) });
   } catch (error) {
     console.error("User login failed", error);
     res.status(500).json({ message: "Unable to log in" });
   }
+});
+
+authRouter.post("/logout", (_req, res) => {
+  res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions());
+  res.json({ message: "Logged out successfully" });
 });
 
 authRouter.get("/profile", requireAuth, async (req: AuthenticatedRequest, res) => {

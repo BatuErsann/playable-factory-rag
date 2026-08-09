@@ -10,12 +10,69 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const express_1 = require("express");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_js_1 = require("./db.js");
+const AUTH_COOKIE_NAME = "playable_factory_token";
+const AUTH_TOKEN_MAX_AGE_SECONDS = 24 * 60 * 60;
 const jwtSecret = () => {
     const secret = process.env.JWT_SECRET;
     if (!secret)
         throw new Error("JWT_SECRET is not configured");
     return secret;
 };
+function cookieSameSite() {
+    const value = process.env.COOKIE_SAME_SITE?.toLowerCase() ?? "lax";
+    if (value === "lax" || value === "strict" || value === "none")
+        return value;
+    throw new Error("COOKIE_SAME_SITE must be lax, strict, or none");
+}
+function cookieIsSecure() {
+    if (process.env.NODE_ENV === "production")
+        return true;
+    if (process.env.COOKIE_SECURE === "true")
+        return true;
+    if (process.env.COOKIE_SECURE === "false")
+        return false;
+    return false;
+}
+function authCookieOptions() {
+    const sameSite = cookieSameSite();
+    const secure = cookieIsSecure();
+    if (sameSite === "none" && !secure) {
+        throw new Error("COOKIE_SAME_SITE=none requires a secure cookie");
+    }
+    const options = {
+        httpOnly: true,
+        sameSite,
+        secure,
+        path: "/",
+    };
+    if (process.env.COOKIE_DOMAIN)
+        options.domain = process.env.COOKIE_DOMAIN;
+    return options;
+}
+function readCookie(req, name) {
+    const cookieHeader = req.headers.cookie;
+    if (!cookieHeader)
+        return undefined;
+    for (const cookie of cookieHeader.split(";")) {
+        const separatorIndex = cookie.indexOf("=");
+        if (separatorIndex < 0)
+            continue;
+        const cookieName = cookie.slice(0, separatorIndex).trim();
+        if (cookieName !== name)
+            continue;
+        try {
+            return decodeURIComponent(cookie.slice(separatorIndex + 1).trim());
+        }
+        catch {
+            return undefined;
+        }
+    }
+    return undefined;
+}
+function readBearerToken(req) {
+    const authorization = req.header("authorization");
+    return authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+}
 function publicUser(user) {
     return { id: user.id, username: user.username, email: user.email, role: user.role, createdAt: user.created_at };
 }
@@ -26,9 +83,9 @@ function isAuthenticatedUser(payload) {
         (payload.role === "USER" || payload.role === "ADMIN"));
 }
 function requireAuth(req, res, next) {
-    const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+    const token = readCookie(req, AUTH_COOKIE_NAME) ?? readBearerToken(req);
     if (!token) {
-        res.status(401).json({ message: "Authorization token is required" });
+        res.status(401).json({ message: "Authentication token is required" });
         return;
     }
     try {
@@ -58,6 +115,10 @@ function requireRole(...allowedRoles) {
     };
 }
 exports.authRouter = (0, express_1.Router)();
+exports.authRouter.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+});
 exports.authRouter.post("/register", async (req, res) => {
     const { username, email, password } = req.body;
     if (typeof username !== "string" || typeof email !== "string" || typeof password !== "string") {
@@ -99,13 +160,21 @@ exports.authRouter.post("/login", async (req, res) => {
             res.status(401).json({ message: "Invalid email or password" });
             return;
         }
-        const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, jwtSecret(), { expiresIn: "24h" });
-        res.json({ token, user: publicUser(user) });
+        const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, jwtSecret(), { expiresIn: AUTH_TOKEN_MAX_AGE_SECONDS });
+        res.cookie(AUTH_COOKIE_NAME, token, {
+            ...authCookieOptions(),
+            maxAge: AUTH_TOKEN_MAX_AGE_SECONDS * 1000,
+        });
+        res.json({ user: publicUser(user) });
     }
     catch (error) {
         console.error("User login failed", error);
         res.status(500).json({ message: "Unable to log in" });
     }
+});
+exports.authRouter.post("/logout", (_req, res) => {
+    res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions());
+    res.json({ message: "Logged out successfully" });
 });
 exports.authRouter.get("/profile", requireAuth, async (req, res) => {
     const result = await db_js_1.db.query("SELECT id, username, email, password_hash, role, created_at FROM users WHERE id = $1", [req.user.id]);

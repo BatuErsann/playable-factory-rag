@@ -16,8 +16,22 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const frontendOrigins = (process.env.FRONTEND_URL ?? "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
 
-app.use(cors());
+if (frontendOrigins.includes("*")) {
+  throw new Error("FRONTEND_URL cannot use a wildcard when credentials are enabled");
+}
+
+app.use(
+  cors({
+    origin: frontendOrigins,
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(express.json());
 app.use("/auth", authRouter);
 
@@ -62,6 +76,89 @@ app.get("/test-embedding", async (_req, res) => {
     });
   }
 });
+
+
+
+app.get(
+  "/admin/stats",
+  requireAuth,
+  requireRole("ADMIN"),
+  async (_req, res) => {
+    try {
+      const [
+        documentsResult,
+        chunksResult,
+        embeddedChunksResult,
+        searchesResult,
+      ] = await Promise.all([
+        db.query("SELECT COUNT(*) FROM documents"),
+        db.query("SELECT COUNT(*) FROM document_chunks"),
+        db.query(
+          "SELECT COUNT(*) FROM document_chunks WHERE embedding IS NOT NULL"
+        ),
+        db.query("SELECT COUNT(*) FROM search_logs"),
+      ]);
+
+      res.json({
+        documents: Number(documentsResult.rows[0].count),
+        chunks: Number(chunksResult.rows[0].count),
+        embeddedChunks: Number(
+          embeddedChunksResult.rows[0].count
+        ),
+        searches: Number(searchesResult.rows[0].count),
+      });
+    } catch (error) {
+      console.error(error);
+
+      res.status(500).json({
+        message: "Failed to fetch admin stats",
+      });
+    }
+  }
+);
+
+
+//detail section    
+
+app.get(
+  "/admin/documents",
+  requireAuth,
+  requireRole("ADMIN"),
+  async (_req, res) => {
+    try {
+      const result = await db.query(`
+        SELECT
+          d.id,
+          d.name,
+          d.path,
+          d.status,
+          d.indexed_at,
+          d.created_at,
+          COUNT(dc.id)::int AS chunk_count,
+          COUNT(dc.embedding)::int AS embedded_chunk_count
+        FROM documents d
+        LEFT JOIN document_chunks dc
+          ON dc.document_id = d.id
+        GROUP BY d.id
+        ORDER BY d.name ASC
+      `);
+
+      res.json({
+        documents: result.rows
+      });
+    } catch (error) {
+      console.error(error);
+
+      res.status(500).json({
+        message: "Failed to fetch documents"
+      });
+    }
+  }
+);
+
+
+
+
 
 
 //post section
@@ -174,6 +271,12 @@ app.post("/ask", requireAuth, requireRole("USER", "ADMIN"), async (req, res) => 
     }
 
     const result = await answerQuestion(question);
+
+    await logSearch(
+  req.user?.id ?? null,
+  question,
+  result.citations.length
+);
 
     res.json({
       question,
