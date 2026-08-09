@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { BrandMark } from "@/components/brand-mark";
@@ -17,7 +17,7 @@ type WorkspaceShellProps = {
 
 const navItems = [
   { href: "/chat", label: "AI Chat", icon: ChatIcon },
-  { href: "/admin", label: "Admin", icon: DashboardIcon },
+  { href: "/admin", label: "Dashboard", icon: DashboardIcon, adminOnly: true },
 ] as const;
 
 export function WorkspaceShell({
@@ -27,14 +27,18 @@ export function WorkspaceShell({
   title,
 }: WorkspaceShellProps) {
   const router = useRouter();
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     getCurrentUser()
       .then((user) => {
-        if (!cancelled && requiredRole && user.role !== requiredRole) {
-          router.replace(getHomeRoute(user.role));
+        if (!cancelled) {
+          setUserRole(user.role);
+          if (requiredRole && user.role !== requiredRole) {
+            router.replace(getHomeRoute(user.role));
+          }
         }
       })
       .catch((error: unknown) => {
@@ -62,23 +66,25 @@ export function WorkspaceShell({
         <BrandMark />
 
         <nav className="mt-12 space-y-2" aria-label="Workspace navigation">
-          {navItems.map(({ href, label, icon: Icon }) => {
-            const isActive = activePage === href.slice(1);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
-                  isActive
-                    ? "bg-[#ff8b00] text-white shadow-[0_10px_28px_rgba(255,139,0,0.14)]"
-                    : "text-white/48 hover:bg-white/[0.05] hover:text-white"
-                }`}
-              >
-                <Icon />
-                {label}
-              </Link>
-            );
-          })}
+          {navItems
+            .filter(({ adminOnly }) => !adminOnly || userRole === "ADMIN")
+            .map(({ href, label, icon: Icon }) => {
+              const isActive = activePage === href.slice(1);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
+                    isActive
+                      ? "bg-[#ff8b00] text-white shadow-[0_10px_28px_rgba(255,139,0,0.14)]"
+                      : "text-white/48 hover:bg-white/[0.05] hover:text-white"
+                  }`}
+                >
+                  <Icon />
+                  {label}
+                </Link>
+              );
+            })}
         </nav>
 
         <div className="mt-auto border-t border-white/[0.07] pt-5">
