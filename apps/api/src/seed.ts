@@ -10,21 +10,51 @@ type SeedUser = {
 };
 
 function productionSeedUsers(): SeedUser[] {
-  const username = process.env.SEED_ADMIN_USERNAME?.trim() || "production-admin";
-  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
-  const password = process.env.SEED_ADMIN_PASSWORD;
+  const adminUsername = process.env.SEED_ADMIN_USERNAME?.trim() || "production-admin";
+  const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
 
-  if (!email || !password) {
+  if (!adminEmail || !adminPassword) {
     throw new Error(
       "SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are required for production seeding"
     );
   }
 
-  if (password.length < 12) {
+  if (adminPassword.length < 12) {
     throw new Error("SEED_ADMIN_PASSWORD must contain at least 12 characters");
   }
 
-  return [{ username, email, password, role: "ADMIN" }];
+  const users: SeedUser[] = [
+    {
+      username: adminUsername,
+      email: adminEmail,
+      password: adminPassword,
+      role: "ADMIN",
+    },
+  ];
+  const userEmail = process.env.SEED_USER_EMAIL?.trim().toLowerCase();
+  const userPassword = process.env.SEED_USER_PASSWORD;
+
+  if (userEmail || userPassword) {
+    if (!userEmail || !userPassword) {
+      throw new Error(
+        "SEED_USER_EMAIL and SEED_USER_PASSWORD must be set together"
+      );
+    }
+
+    if (userPassword.length < 12) {
+      throw new Error("SEED_USER_PASSWORD must contain at least 12 characters");
+    }
+
+    users.push({
+      username: process.env.SEED_USER_USERNAME?.trim() || "production-user",
+      email: userEmail,
+      password: userPassword,
+      role: "USER",
+    });
+  }
+
+  return users;
 }
 
 async function seed(): Promise<void> {

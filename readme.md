@@ -235,6 +235,9 @@ AUTO_INGEST_INTERVAL_MS=60000
 SEED_ADMIN_USERNAME=production-admin
 SEED_ADMIN_EMAIL=<initial-admin-email>
 SEED_ADMIN_PASSWORD=<initial-admin-password-with-at-least-12-characters>
+SEED_USER_USERNAME=production-user
+SEED_USER_EMAIL=<optional-initial-user-email>
+SEED_USER_PASSWORD=<optional-initial-user-password-with-at-least-12-characters>
 ```
 
 Web build:
@@ -274,7 +277,7 @@ Do not run the seed automatically at startup. After the production variables are
 npm run seed:production
 ```
 
-Production seeding requires `SEED_ADMIN_EMAIL` and a `SEED_ADMIN_PASSWORD` of at least 12 characters; it does not use the local demo credentials. After seeding, sign in with that administrator, change the password if appropriate, and trigger ingestion from the dashboard. The seed password can then be removed from Coolify and the API redeployed.
+Production seeding requires `SEED_ADMIN_EMAIL` and a `SEED_ADMIN_PASSWORD` of at least 12 characters; it does not use the local demo credentials. Set `SEED_USER_EMAIL` and `SEED_USER_PASSWORD` together to create an optional standard user. After seeding, sign in with the administrator, change the password if appropriate, and trigger ingestion from the dashboard. The seed passwords can then be removed from Coolify and the API redeployed.
 
 Verify the deployment in this order:
 
@@ -337,6 +340,15 @@ npm run mcp --workspace=api
 ```
 
 The server can then be connected to an MCP-compatible client or MCP Inspector.
+
+### Remote MCP endpoint
+
+The API also exposes a Streamable HTTP MCP endpoint at `POST /mcp`. Configure
+`MCP_API_KEY` as a runtime-only environment variable and connect clients to
+`https://api.batuhanersan.com.tr/mcp` using `Authorization: Bearer <MCP_API_KEY>`.
+If a browser-originated client is used, set `MCP_ALLOWED_ORIGINS` to its exact,
+comma-separated origins; requests that include an unapproved `Origin` header
+are rejected.
 
 ## Doxygen Documentation
 

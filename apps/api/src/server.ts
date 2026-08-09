@@ -1,10 +1,13 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { timingSafeEqual } from "node:crypto";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 
 import { db } from "./db.js";
 import { authRouter, requireAuth, requireRole } from "./auth.js";
 import { initializeDatabase } from "./db/init.js";
+import { createMcpServer } from "./mcp-server.js";
 import {
   ingestDocuments,
   startAutomaticIngestion,
@@ -40,6 +43,66 @@ app.use(
 
 app.use(express.json());
 app.use("/auth", authRouter);
+
+const mcpHandler = createMcpHandler(() => createMcpServer(), {
+  responseMode: "json",
+});
+
+function hasValidMcpApiKey(authorization: string | undefined): boolean {
+  const expectedKey = process.env.MCP_API_KEY;
+
+  if (!expectedKey || !authorization?.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const suppliedKey = authorization.slice("Bearer ".length);
+  const expectedBuffer = Buffer.from(expectedKey);
+  const suppliedBuffer = Buffer.from(suppliedKey);
+
+  return (
+    expectedBuffer.length === suppliedBuffer.length &&
+    timingSafeEqual(expectedBuffer, suppliedBuffer)
+  );
+}
+
+app.all("/mcp", async (req, res) => {
+  const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const origin = req.get("origin");
+
+  if (origin && !allowedOrigins.includes(origin)) {
+    res.status(403).json({ message: "MCP origin is not allowed" });
+    return;
+  }
+
+  if (!hasValidMcpApiKey(req.get("authorization"))) {
+    res.status(401).set("WWW-Authenticate", "Bearer").json({
+      message: "A valid MCP API key is required",
+    });
+    return;
+  }
+
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (value) {
+      headers.set(name, Array.isArray(value) ? value.join(",") : value);
+    }
+  }
+
+  const methodHasBody = ["POST", "PUT", "PATCH"].includes(req.method);
+  const response = await mcpHandler.fetch(
+    new Request(`https://${req.get("host")}${req.originalUrl}`, {
+      method: req.method,
+      headers,
+      body: methodHasBody ? JSON.stringify(req.body) : undefined,
+    })
+  );
+
+  response.headers.forEach((value, name) => res.set(name, value));
+  res.status(response.status).send(Buffer.from(await response.arrayBuffer()));
+});
 
 // GET routes
 
