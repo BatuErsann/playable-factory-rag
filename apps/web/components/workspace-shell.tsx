@@ -16,7 +16,7 @@ type WorkspaceShellProps = {
 };
 
 const navItems = [
-  { href: "/chat", label: "AI Chat", icon: ChatIcon },
+  { href: "/chat", label: "AI Chat", icon: ChatIcon, adminOnly: false },
   { href: "/admin", label: "Dashboard", icon: DashboardIcon, adminOnly: true },
 ] as const;
 
@@ -51,6 +51,25 @@ export function WorkspaceShell({
       cancelled = true;
     };
   }, [requiredRole, router]);
+
+  useEffect(() => {
+    // Keep a same-page history entry while a user is authenticated. This lets
+    // us handle the browser Back action before the browser navigates away from
+    // the application, so the active server session is cleared as well.
+    window.history.pushState({ workspaceBackGuard: true }, "", window.location.href);
+
+    const handleBrowserBack = () => {
+      void logout().finally(() => {
+        router.replace("/login");
+      });
+    };
+
+    window.addEventListener("popstate", handleBrowserBack);
+
+    return () => {
+      window.removeEventListener("popstate", handleBrowserBack);
+    };
+  }, [router]);
 
   async function handleLogout() {
     try {

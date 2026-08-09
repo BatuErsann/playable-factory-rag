@@ -139,7 +139,7 @@ export default function AdminPage() {
     <WorkspaceShell
       activePage="admin"
       requiredRole="ADMIN"
-      title="Admin dashboard"
+      title="Dashboard"
     >
       <div className="px-5 py-8 sm:px-8">
         <div className="mx-auto max-w-7xl">
@@ -150,7 +150,7 @@ export default function AdminPage() {
               </p>
 
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">
-                Admin dashboard
+                Dashboard
               </h2>
 
               <p className="mt-2 text-sm text-white/40">
