@@ -116,6 +116,10 @@ function isAuthenticatedUser(payload: string | JwtPayload): payload is Authentic
   );
 }
 
+/**
+ * Express middleware that authenticates an HttpOnly cookie or Bearer token.
+ * Cookie authentication takes precedence when both are supplied.
+ */
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   const token = readCookie(req, AUTH_COOKIE_NAME) ?? readBearerToken(req);
   if (!token) {
@@ -137,6 +141,12 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
   }
 }
 
+/**
+ * Builds Express middleware that permits only the supplied application roles.
+ * Must run after `requireAuth`.
+ *
+ * Accepts the roles allowed to continue to the route handler.
+ */
 export function requireRole(...allowedRoles: UserRole[]) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {

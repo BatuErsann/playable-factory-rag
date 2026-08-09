@@ -5,11 +5,17 @@ import { searchDocuments } from "./search.js";
 dotenv.config();
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 const MIN_SIMILARITY = 0.25;
 
+/**
+ * Answers a question using only sufficiently relevant chunks from the corpus.
+ *
+ * Accepts a natural-language question submitted by an authenticated user.
+ * @returns A grounded answer and the chunks used as citations.
+ */
 export async function answerQuestion(question: string) {
   const results = await searchDocuments(question, 5);
 
@@ -21,7 +27,7 @@ export async function answerQuestion(question: string) {
     return {
       answer:
         "I could not find enough information in the corpus to answer this question.",
-      citations: []
+      citations: [],
     };
   }
 
@@ -43,6 +49,7 @@ ${result.content}
 You are answering questions using only the provided corpus context.
 
 Rules:
+
 - Only use information contained in the context.
 - Do not use outside knowledge.
 - If the context does not contain enough information, say that you cannot answer from the provided corpus.
@@ -54,7 +61,7 @@ ${question}
 
 Context:
 ${context}
-`
+`,
   });
 
   return {
@@ -64,7 +71,8 @@ ${context}
       documentName: result.document_name,
       documentPath: result.document_path,
       chunkIndex: result.chunk_index,
-      score: result.score
-    }))
+      score: result.score,
+      passage: result.content,
+    })),
   };
 }

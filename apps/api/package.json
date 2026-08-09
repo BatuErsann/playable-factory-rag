@@ -6,7 +6,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "mcp": "tsx src/mcp.ts"
+    "mcp": "tsx src/mcp.ts",
+    "seed": "tsx src/seed.ts",
+    "evaluate": "tsx src/evaluate.ts"
   },
   "keywords": [],
   "author": "",

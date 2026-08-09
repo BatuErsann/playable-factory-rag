@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import type { AskResponse, Citation } from "@playable/shared";
+
 import { WorkspaceShell } from "@/components/workspace-shell";
 
 const suggestions = [
@@ -8,21 +10,6 @@ const suggestions = [
   "Explain the current Lumen SDK setup",
   "Why are audio assets built separately?",
 ];
-
-type Citation = {
-  id: number;
-  documentName: string;
-  documentPath: string;
-  chunkIndex: number;
-  score: number;
-};
-
-type AskResponse = {
-  question: string;
-  answer: string;
-  citations: Citation[];
-  message?: string;
-};
 
 export default function ChatPage() {
   const [question, setQuestion] = useState("");
@@ -32,7 +19,7 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
     const trimmedQuestion = question.trim();
@@ -92,12 +79,11 @@ export default function ChatPage() {
   return (
     <WorkspaceShell activePage="chat" title="Chat">
       <div className="flex h-[calc(100vh-73px)] min-h-0 flex-col">
-        {/* Conversation area */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-10 sm:px-8">
-          <div className="mx-auto w-full max-w-3xl">
+        <div className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
+          <div className="mx-auto max-w-3xl">
             {!submittedQuestion && !answer && (
-              <div className="py-16 text-center">
-                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              <div className="py-16 text-center sm:py-24">
+                <h1 className="text-2xl font-semibold text-white sm:text-3xl">
                   What can I help you find?
                 </h1>
 
@@ -121,7 +107,6 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* User message */}
             {submittedQuestion && (
               <div className="mb-6 flex justify-end">
                 <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#ff8b00] px-4 py-3 text-sm leading-6 text-white">
@@ -130,7 +115,6 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Loading */}
             {isLoading && (
               <div className="flex justify-start">
                 <div className="rounded-2xl rounded-bl-md border border-white/[0.08] bg-white/[0.035] px-5 py-4">
@@ -141,7 +125,6 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* AI answer */}
             {answer && !isLoading && (
               <div className="flex justify-start">
                 <div className="w-full max-w-[90%]">
@@ -155,7 +138,6 @@ export default function ChatPage() {
                     </p>
                   </div>
 
-                  {/* Sources */}
                   {citations.length > 0 && (
                     <div className="mt-5">
                       <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/30">
@@ -184,7 +166,17 @@ export default function ChatPage() {
                               </span>
                             </div>
 
-                            <p className="mt-2 text-[10px] text-white/30">
+                            <div className="mt-4 rounded-lg border border-white/[0.06] bg-black/10 p-3">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">
+                                Relevant passage
+                              </p>
+
+                              <p className="whitespace-pre-wrap text-xs leading-6 text-white/55">
+                                {citation.passage}
+                              </p>
+                            </div>
+
+                            <p className="mt-3 text-[10px] text-white/30">
                               Chunk {citation.chunkIndex}
                             </p>
                           </div>
@@ -196,7 +188,6 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Error */}
             {error && (
               <div className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4">
                 <p className="text-sm text-red-200">{error}</p>
@@ -205,7 +196,6 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Input area */}
         <div className="shrink-0 border-t border-white/[0.05] bg-[#09152a] px-5 pb-6 pt-4 sm:px-8">
           <form
             onSubmit={handleSubmit}
@@ -241,10 +231,7 @@ export default function ChatPage() {
                     d="m5 12 14-7-4.5 14-3-5.5L5 12Z"
                     strokeLinejoin="round"
                   />
-                  <path
-                    d="m11.5 13.5 3-3"
-                    strokeLinecap="round"
-                  />
+                  <path d="m11.5 13.5 3-3" strokeLinecap="round" />
                 </svg>
               )}
             </button>

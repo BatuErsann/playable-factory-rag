@@ -27,3 +27,6 @@ PlayableFactory_AI_SE_Case_RAG.pdf
 
 # TypeScript
 *.tsbuildinfo
+
+# Generated documentation
+docs/generated/

@@ -4,6 +4,12 @@ exports.searchDocuments = searchDocuments;
 exports.logSearch = logSearch;
 const db_js_1 = require("./db.js");
 const embedding_js_1 = require("./embedding.js");
+/**
+ * Searches indexed chunks by pgvector cosine distance.
+ *
+ * Accepts natural-language query text and an optional maximum result count.
+ * @returns Database rows containing chunk metadata and similarity scores.
+ */
 async function searchDocuments(query, limit = 5) {
     const queryEmbedding = await (0, embedding_js_1.generateEmbedding)(query);
     const result = await db_js_1.db.query(`
@@ -33,6 +39,11 @@ async function searchDocuments(query, limit = 5) {
     ]);
     return result.rows;
 }
+/**
+ * Records a semantic search or RAG question for usage reporting.
+ *
+ * Stores the user identifier, submitted query, and retrieved result count.
+ */
 async function logSearch(userId, query, resultCount) {
     await db_js_1.db.query(`
     INSERT INTO search_logs (

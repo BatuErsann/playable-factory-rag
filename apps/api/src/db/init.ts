@@ -17,4 +17,8 @@ export async function initializeDatabase(): Promise<void> {
   await db.query(
     "CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (username)",
   );
+
+  await db.query(
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS last_error TEXT",
+  );
 }

@@ -82,6 +82,10 @@ function isAuthenticatedUser(payload) {
         typeof payload.username === "string" &&
         (payload.role === "USER" || payload.role === "ADMIN"));
 }
+/**
+ * Express middleware that authenticates an HttpOnly cookie or Bearer token.
+ * Cookie authentication takes precedence when both are supplied.
+ */
 function requireAuth(req, res, next) {
     const token = readCookie(req, AUTH_COOKIE_NAME) ?? readBearerToken(req);
     if (!token) {
@@ -101,6 +105,12 @@ function requireAuth(req, res, next) {
         res.status(401).json({ message: "Invalid or expired token" });
     }
 }
+/**
+ * Builds Express middleware that permits only the supplied application roles.
+ * Must run after `requireAuth`.
+ *
+ * Accepts the roles allowed to continue to the route handler.
+ */
 function requireRole(...allowedRoles) {
     return (req, res, next) => {
         if (!req.user) {

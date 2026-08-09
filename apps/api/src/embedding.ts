@@ -1,5 +1,12 @@
 import OpenAI from "openai";
 
+/**
+ * Generates the vector representation used by ingestion and semantic search.
+ *
+ * The input text must be a non-empty source passage or search query.
+ * @returns A 1536-dimensional embedding from `text-embedding-3-small`.
+ * @throws Error when the text is empty, configuration is missing, or no vector is returned.
+ */
 export async function generateEmbedding(text: string): Promise<number[]> {
   if (!text.trim()) {
     throw new Error("Cannot generate an embedding for empty text");

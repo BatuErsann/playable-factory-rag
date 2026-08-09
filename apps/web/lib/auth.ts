@@ -41,16 +41,19 @@ export function clearLegacyAuthStorage(): void {
   }
 }
 
+/** Authenticates with the API and relies on its HttpOnly Set-Cookie response. */
 export async function login(email: string, password: string): Promise<AuthUser> {
   const response = await postJson<UserResponse>("/auth/login", { email, password });
   return userFromResponse(response);
 }
 
+/** Restores the current browser session from the backend profile endpoint. */
 export async function getCurrentUser(): Promise<AuthUser> {
   const response = await getJson<UserResponse>("/auth/profile");
   return userFromResponse(response);
 }
 
+/** Clears the backend session cookie and any legacy local authentication data. */
 export async function logout(): Promise<void> {
   try {
     await postJson<{ message: string }>("/auth/logout");
@@ -59,6 +62,7 @@ export async function logout(): Promise<void> {
   }
 }
 
+/** Returns the appropriate UX landing page for an authenticated role. */
 export function getHomeRoute(role: UserRole): "/chat" | "/admin" {
   return role === "ADMIN" ? "/admin" : "/chat";
 }

@@ -25,6 +25,11 @@ async function readJson(response: Response): Promise<unknown> {
   return response.json();
 }
 
+/**
+ * Sends a credentialed request to the configured API and normalizes failures.
+ *
+ * Accepts an API path, an HTTP method, and an optional JSON body.
+ */
 export async function apiRequest<TResponse>(
   path: string,
   options: ApiRequestOptions = {},
@@ -51,10 +56,12 @@ export async function apiRequest<TResponse>(
   return data as TResponse;
 }
 
+/** Performs a credentialed GET request. */
 export function getJson<TResponse>(path: string): Promise<TResponse> {
   return apiRequest<TResponse>(path);
 }
 
+/** Performs a credentialed POST request with an optional JSON body. */
 export function postJson<TResponse>(
   path: string,
   body?: Record<string, unknown>,

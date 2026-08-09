@@ -16,4 +16,5 @@ async function initializeDatabase() {
     // Existing local databases created before username support remain compatible.
     await db_js_1.db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT");
     await db_js_1.db.query("CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (username)");
+    await db_js_1.db.query("ALTER TABLE documents ADD COLUMN IF NOT EXISTS last_error TEXT");
 }

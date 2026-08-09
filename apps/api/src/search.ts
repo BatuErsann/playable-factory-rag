@@ -1,6 +1,12 @@
 import { db } from "./db.js";
 import { generateEmbedding } from "./embedding.js";
 
+/**
+ * Searches indexed chunks by pgvector cosine distance.
+ *
+ * Accepts natural-language query text and an optional maximum result count.
+ * @returns Database rows containing chunk metadata and similarity scores.
+ */
 export async function searchDocuments(
   query: string,
   limit = 5
@@ -39,6 +45,11 @@ export async function searchDocuments(
   return result.rows;
 }
 
+/**
+ * Records a semantic search or RAG question for usage reporting.
+ *
+ * Stores the user identifier, submitted query, and retrieved result count.
+ */
 export async function logSearch(
   userId: number | null,
   query: string,
