@@ -11,8 +11,8 @@ COPY packages/shared/package.json packages/shared/package.json
 # Install only the matching native packages at the already locked versions.
 RUN npm ci \
     && ARCH="$(node -p 'process.arch')" \
-    && NEXT_VERSION="$(node -p 'require("./apps/web/node_modules/next/package.json").version')" \
-    && LIGHTNINGCSS_VERSION="$(node -p 'require("./apps/web/node_modules/lightningcss/package.json").version')" \
+    && NEXT_VERSION="$(node -p 'require("./node_modules/next/package.json").version')" \
+    && LIGHTNINGCSS_VERSION="$(node -p 'require("./node_modules/lightningcss/package.json").version')" \
     && npm install --no-save --package-lock=false \
       "@next/swc-linux-${ARCH}-musl@${NEXT_VERSION}" \
       "lightningcss-linux-${ARCH}-musl@${LIGHTNINGCSS_VERSION}"
