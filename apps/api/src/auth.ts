@@ -6,6 +6,20 @@ import { db } from "./db.js";
 
 export type UserRole = "USER" | "ADMIN";
 
+type AuthenticatedUser = JwtPayload & {
+  id: number;
+  role: UserRole;
+  username: string;
+};
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthenticatedUser;
+    }
+  }
+}
+
 type UserRow = {
   id: number;
   username: string;
@@ -15,7 +29,7 @@ type UserRow = {
   created_at: Date;
 };
 
-type AuthenticatedRequest = Request & { user?: JwtPayload & { id: number; role: UserRole; username: string } };
+type AuthenticatedRequest = Request & { user?: AuthenticatedUser };
 
 const jwtSecret = (): string => {
   const secret = process.env.JWT_SECRET;
@@ -27,6 +41,15 @@ function publicUser(user: UserRow) {
   return { id: user.id, username: user.username, email: user.email, role: user.role, createdAt: user.created_at };
 }
 
+function isAuthenticatedUser(payload: string | JwtPayload): payload is AuthenticatedUser {
+  return (
+    typeof payload !== "string" &&
+    Number.isInteger(payload.id) &&
+    typeof payload.username === "string" &&
+    (payload.role === "USER" || payload.role === "ADMIN")
+  );
+}
+
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) {
@@ -35,11 +58,33 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
   }
 
   try {
-    req.user = jwt.verify(token, jwtSecret()) as AuthenticatedRequest["user"];
+    const payload = jwt.verify(token, jwtSecret());
+    if (!isAuthenticatedUser(payload)) {
+      res.status(401).json({ message: "Invalid token payload" });
+      return;
+    }
+
+    req.user = payload;
     next();
   } catch {
     res.status(401).json({ message: "Invalid or expired token" });
   }
+}
+
+export function requireRole(...allowedRoles: UserRole[]) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ message: "Authentication is required" });
+      return;
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      res.status(403).json({ message: "Insufficient permissions" });
+      return;
+    }
+
+    next();
+  };
 }
 
 export const authRouter = Router();

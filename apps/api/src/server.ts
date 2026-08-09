@@ -3,11 +3,13 @@ import cors from "cors";
 
 import dotenv from "dotenv";
 import { db } from "./db.js";
-import { authRouter } from "./auth.js";
+import { authRouter, requireAuth, requireRole } from "./auth.js";
 import { initializeDatabase } from "./db/init.js";
 
 import { ingestDocuments } from "./ingest.js";
 import { generateEmbedding } from "./embedding.js";
+import { searchDocuments, logSearch } from "./search.js";
+import { answerQuestion } from "./rag.js";
 
 
 dotenv.config();
@@ -64,7 +66,7 @@ app.get("/test-embedding", async (_req, res) => {
 
 //post section
 
-app.post("/ingest", async (_req, res) => {
+app.post("/ingest", requireAuth, requireRole("ADMIN"), async (_req, res) => {
   try {
     await ingestDocuments();
 
@@ -106,7 +108,6 @@ app.post("/test-store-embedding", async (_req, res) => {
         `[${embedding.join(",")}]`
       ]
     );
-
     res.json({
       message: "Embedding stored",
       chunkId: result.rows[0].id,
@@ -120,6 +121,73 @@ app.post("/test-store-embedding", async (_req, res) => {
     });
   }
 });
+
+
+
+
+app.post("/search", requireAuth, requireRole("USER", "ADMIN"), async (req, res) => {
+  try {
+    const { query, limit } = req.body;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({
+        message: "Query is required"
+      });
+    }
+
+    const results = await searchDocuments(
+      query,
+      typeof limit === "number" ? limit : 5
+    );
+
+
+     await logSearch(
+      req.user?.id ?? null,
+      query,
+      results.length
+    );
+
+  
+
+
+    res.json({
+      query,
+      results
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Search failed"
+    });
+  }
+});
+
+app.post("/ask", requireAuth, requireRole("USER", "ADMIN"), async (req, res) => {
+  try {
+    const { question } = req.body ?? {};
+
+    if (!question || typeof question !== "string") {
+      return res.status(400).json({
+        message: "Question is required"
+      });
+    }
+
+    const result = await answerQuestion(question);
+
+    res.json({
+      question,
+      ...result
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to answer question"
+    });
+  }
+});
+
 
 async function startServer(): Promise<void> {
   await initializeDatabase();
