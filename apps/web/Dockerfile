@@ -9,7 +9,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
 # npm lockfiles generated on another OS can omit Linux-only native packages.
 # Install only the matching native packages at the already locked versions.
-RUN npm ci \
+RUN npm ci --include=dev \
     && ARCH="$(node -p 'process.arch')" \
     && NEXT_VERSION="$(node -p 'require("./node_modules/next/package.json").version')" \
     && LIGHTNINGCSS_VERSION="$(node -p 'require("./package-lock.json").packages["node_modules/lightningcss"].version')" \
