@@ -11,6 +11,65 @@ const suggestions = [
   "Why are audio assets built separately?",
 ];
 
+const highlightStopWords = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "is",
+  "are",
+  "was",
+  "were",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "with",
+  "what",
+  "why",
+  "how",
+  "which",
+]);
+
+function HighlightedPassage({
+  passage,
+  question,
+}: {
+  passage: string;
+  question: string;
+}) {
+  const queryTerms = new Set(
+    (question.match(/[\p{L}\p{N}]+/gu) ?? [])
+      .map((term) => term.toLowerCase())
+      .filter(
+        (term) => term.length >= 3 && !highlightStopWords.has(term),
+      ),
+  );
+
+  if (queryTerms.size === 0) {
+    return <>{passage}</>;
+  }
+
+  return (
+    <>
+      {passage.split(/([\p{L}\p{N}]+)/gu).map((part, index) =>
+        queryTerms.has(part.toLowerCase()) ? (
+          <mark
+            key={`${index}-${part}`}
+            className="rounded bg-[#ff8b00]/20 px-0.5 text-[#ffb454]"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 export default function ChatPage() {
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState("");
@@ -172,7 +231,10 @@ export default function ChatPage() {
                               </p>
 
                               <p className="whitespace-pre-wrap text-xs leading-6 text-white/55">
-                                {citation.passage}
+                                <HighlightedPassage
+                                  passage={citation.passage}
+                                  question={submittedQuestion}
+                                />
                               </p>
                             </div>
 

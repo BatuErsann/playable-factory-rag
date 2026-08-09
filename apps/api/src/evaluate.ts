@@ -1,9 +1,18 @@
-import { searchDocuments } from "./search.js";
 import { answerQuestion } from "./rag.js";
+import {
+  searchDocuments,
+  type SearchMode,
+} from "./search.js";
 
 type EvaluationCase = {
   question: string;
   expectedDocuments: string[];
+};
+
+type RetrievalMetrics = {
+  top1Accuracy: number;
+  recallAt3: number;
+  meanReciprocalRank: number;
 };
 
 const retrievalCases: EvaluationCase[] = [
@@ -49,94 +58,102 @@ function matchesExpectedDocument(
   );
 }
 
-async function runEvaluation(): Promise<void> {
+async function evaluateRetrieval(
+  mode: SearchMode
+): Promise<RetrievalMetrics> {
   let top1Hits = 0;
-  let top3Hits = 0;
+  let recallAt3Total = 0;
+  let reciprocalRankTotal = 0;
 
-  console.log("\nRetrieval Evaluation\n");
+  console.log(`\n${mode.toUpperCase()} retrieval\n`);
 
   for (const testCase of retrievalCases) {
-    const results = await searchDocuments(testCase.question, 5);
-
+    const results = await searchDocuments(testCase.question, 5, mode);
     const top1 = results[0];
-    const top3 = results.slice(0, 3);
+    const top3DocumentNames = new Set(
+      results.slice(0, 3).map((result) => result.document_name.toLowerCase())
+    );
 
     const top1Hit =
       top1 !== undefined &&
-      matchesExpectedDocument(
-        top1.document_name,
-        testCase.expectedDocuments
-      );
+      matchesExpectedDocument(top1.document_name, testCase.expectedDocuments);
 
-    const top3Hit = top3.some((result) =>
-      matchesExpectedDocument(
-        result.document_name,
-        testCase.expectedDocuments
-      )
+    const matchedExpectedDocuments = testCase.expectedDocuments.filter(
+      (expected) => top3DocumentNames.has(expected.toLowerCase())
+    ).length;
+    const recallAt3 =
+      matchedExpectedDocuments / testCase.expectedDocuments.length;
+
+    const firstRelevantIndex = results.findIndex((result) =>
+      matchesExpectedDocument(result.document_name, testCase.expectedDocuments)
     );
+    const reciprocalRank =
+      firstRelevantIndex >= 0 ? 1 / (firstRelevantIndex + 1) : 0;
 
     if (top1Hit) {
       top1Hits += 1;
     }
 
-    if (top3Hit) {
-      top3Hits += 1;
-    }
+    recallAt3Total += recallAt3;
+    reciprocalRankTotal += reciprocalRank;
 
     console.log(`Question: ${testCase.question}`);
+    console.log(`Expected: ${testCase.expectedDocuments.join(", ")}`);
     console.log(
-      `Expected: ${testCase.expectedDocuments.join(", ")}`
-    );
-    console.log(
-      `Top 1: ${top1?.document_name ?? "No result"} ${
-        top1Hit ? "✓" : "✗"
-      }`
-    );
-    console.log(
-      `Top 3: ${top3
+      `Top 3: ${results
+        .slice(0, 3)
         .map((result) => result.document_name)
-        .join(", ")} ${top3Hit ? "✓" : "✗"}`
+        .join(", ")}`
     );
-    console.log("");
+    console.log(
+      `Top-1: ${top1Hit ? "PASS" : "FAIL"} | Recall@3: ${recallAt3.toFixed(2)} | RR: ${reciprocalRank.toFixed(2)}\n`
+    );
   }
 
-  const total = retrievalCases.length;
-  const top1Accuracy = (top1Hits / total) * 100;
-  const top3Accuracy = (top3Hits / total) * 100;
+  return {
+    top1Accuracy: top1Hits / retrievalCases.length,
+    recallAt3: recallAt3Total / retrievalCases.length,
+    meanReciprocalRank: reciprocalRankTotal / retrievalCases.length,
+  };
+}
 
-  console.log("Retrieval Summary");
-  console.log("-----------------");
+function printComparison(
+  semantic: RetrievalMetrics,
+  hybrid: RetrievalMetrics
+): void {
+  console.log("\nRetrieval comparison");
+  console.log("--------------------");
   console.log(
-    `Top-1 accuracy: ${top1Hits}/${total} (${top1Accuracy.toFixed(
-      1
-    )}%)`
+    `Top-1 accuracy  semantic=${semantic.top1Accuracy.toFixed(2)} hybrid=${hybrid.top1Accuracy.toFixed(2)} delta=${(hybrid.top1Accuracy - semantic.top1Accuracy).toFixed(2)}`
   );
   console.log(
-    `Top-3 accuracy: ${top3Hits}/${total} (${top3Accuracy.toFixed(
-      1
-    )}%)`
+    `Recall@3       semantic=${semantic.recallAt3.toFixed(2)} hybrid=${hybrid.recallAt3.toFixed(2)} delta=${(hybrid.recallAt3 - semantic.recallAt3).toFixed(2)}`
   );
+  console.log(
+    `MRR            semantic=${semantic.meanReciprocalRank.toFixed(2)} hybrid=${hybrid.meanReciprocalRank.toFixed(2)} delta=${(hybrid.meanReciprocalRank - semantic.meanReciprocalRank).toFixed(2)}`
+  );
+}
 
-  console.log("\nUnanswerable Question Test");
+async function runEvaluation(): Promise<void> {
+  const semanticMetrics = await evaluateRetrieval("semantic");
+  const hybridMetrics = await evaluateRetrieval("hybrid");
+
+  printComparison(semanticMetrics, hybridMetrics);
+
+  console.log("\nUnanswerable question test");
   console.log("--------------------------");
 
-  const unanswerableResult = await answerQuestion(
-    unanswerableQuestion
-  );
-
+  const unanswerableResult = await answerQuestion(unanswerableQuestion);
   const refused =
     unanswerableResult.citations.length === 0 &&
-    unanswerableResult.answer.toLowerCase().includes(
-      "could not find enough information"
-    );
+    unanswerableResult.answer
+      .toLowerCase()
+      .includes("could not find enough information");
 
   console.log(`Question: ${unanswerableQuestion}`);
   console.log(`Answer: ${unanswerableResult.answer}`);
-  console.log(
-    `Citations: ${unanswerableResult.citations.length}`
-  );
-  console.log(`Refusal behavior: ${refused ? "✓ PASS" : "✗ FAIL"}`);
-
+  console.log(`Citations: ${unanswerableResult.citations.length}`);
+  console.log(`Refusal behavior: ${refused ? "PASS" : "FAIL"}`);
   console.log("\nEvaluation complete.");
 }
 

@@ -2,23 +2,51 @@ import bcrypt from "bcryptjs";
 import { db } from "./db.js";
 import { initializeDatabase } from "./db/init.js";
 
+type SeedUser = {
+  username: string;
+  email: string;
+  password: string;
+  role: "USER" | "ADMIN";
+};
+
+function productionSeedUsers(): SeedUser[] {
+  const username = process.env.SEED_ADMIN_USERNAME?.trim() || "production-admin";
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD;
+
+  if (!email || !password) {
+    throw new Error(
+      "SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are required for production seeding"
+    );
+  }
+
+  if (password.length < 12) {
+    throw new Error("SEED_ADMIN_PASSWORD must contain at least 12 characters");
+  }
+
+  return [{ username, email, password, role: "ADMIN" }];
+}
+
 async function seed(): Promise<void> {
   await initializeDatabase();
 
-  const users = [
-    {
-      username: "demo-user",
-      email: "user@playable.com",
-      password: "User123",
-      role: "USER",
-    },
-    {
-      username: "demo-admin",
-      email: "admin@playable.com",
-      password: "Admin123",
-      role: "ADMIN",
-    },
-  ] as const;
+  const users: readonly SeedUser[] =
+    process.env.NODE_ENV === "production"
+      ? productionSeedUsers()
+      : [
+          {
+            username: "demo-user",
+            email: "user@playable.com",
+            password: "User123",
+            role: "USER",
+          },
+          {
+            username: "demo-admin",
+            email: "admin@playable.com",
+            password: "Admin123",
+            role: "ADMIN",
+          },
+        ];
 
   for (const user of users) {
     const passwordHash = await bcrypt.hash(user.password, 10);

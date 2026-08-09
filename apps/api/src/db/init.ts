@@ -1,16 +1,13 @@
+import fs from "fs";
+import path from "path";
+
 import { db } from "../db.js";
 
 export async function initializeDatabase(): Promise<void> {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK (role IN ('USER', 'ADMIN')),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  const schemaPath = path.resolve(process.cwd(), "src/db/init.sql");
+  const schema = await fs.promises.readFile(schemaPath, "utf8");
+
+  await db.query(schema);
 
   // Existing local databases created before username support remain compatible.
   await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT");
@@ -20,5 +17,8 @@ export async function initializeDatabase(): Promise<void> {
 
   await db.query(
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS last_error TEXT",
+  );
+  await db.query(
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT",
   );
 }

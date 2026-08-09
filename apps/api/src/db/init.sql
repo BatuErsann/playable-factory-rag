@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS documents (
   name TEXT NOT NULL,
   path TEXT UNIQUE NOT NULL,
   status TEXT NOT NULL DEFAULT 'PENDING',
+  last_error TEXT,
+  content_hash TEXT,
   indexed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

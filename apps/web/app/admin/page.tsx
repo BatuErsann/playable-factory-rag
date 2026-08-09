@@ -106,7 +106,7 @@ export default function AdminPage() {
       });
 
       if (!response.ok) {
-        let message = "Failed to re-index the corpus.";
+        let message = "Failed to synchronize the corpus.";
 
         try {
           const data = (await response.json()) as {
@@ -122,13 +122,13 @@ export default function AdminPage() {
         throw new Error(message);
       }
 
-      setIngestMessage("Corpus re-indexed successfully.");
+      setIngestMessage("Corpus synchronized successfully.");
       await loadAdminData();
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "Something went wrong while re-indexing the corpus."
+          : "Something went wrong while synchronizing the corpus."
       );
     } finally {
       setIsIngesting(false);
@@ -164,7 +164,7 @@ export default function AdminPage() {
               disabled={isIngesting}
               className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#ff8b00] px-5 text-sm font-semibold text-white transition hover:bg-[#ff9d26] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isIngesting ? "Indexing..." : "Re-index corpus"}
+              {isIngesting ? "Syncing..." : "Sync corpus"}
             </button>
           </div>
 

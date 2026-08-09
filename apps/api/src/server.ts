@@ -5,7 +5,10 @@ import dotenv from "dotenv";
 import { db } from "./db.js";
 import { authRouter, requireAuth, requireRole } from "./auth.js";
 import { initializeDatabase } from "./db/init.js";
-import { ingestDocuments } from "./ingest.js";
+import {
+  ingestDocuments,
+  startAutomaticIngestion,
+} from "./ingest.js";
 import { searchDocuments, logSearch } from "./search.js";
 import { answerQuestion } from "./rag.js";
 
@@ -270,6 +273,7 @@ app.post(
 
 async function startServer(): Promise<void> {
   await initializeDatabase();
+  startAutomaticIngestion();
 
   app.listen(PORT, () => {
     console.log(`API running on http://localhost:${PORT}`);

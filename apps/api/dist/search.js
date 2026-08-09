@@ -4,14 +4,56 @@ exports.searchDocuments = searchDocuments;
 exports.logSearch = logSearch;
 const db_js_1 = require("./db.js");
 const embedding_js_1 = require("./embedding.js");
-/**
- * Searches indexed chunks by pgvector cosine distance.
- *
- * Accepts natural-language query text and an optional maximum result count.
- * @returns Database rows containing chunk metadata and similarity scores.
- */
-async function searchDocuments(query, limit = 5) {
-    const queryEmbedding = await (0, embedding_js_1.generateEmbedding)(query);
+const RRF_K = 60;
+const MIN_CANDIDATE_COUNT = 30;
+const CANDIDATE_MULTIPLIER = 6;
+const ENGLISH_STOP_WORDS = new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "did",
+    "do",
+    "does",
+    "for",
+    "from",
+    "had",
+    "has",
+    "have",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+    "with",
+]);
+function buildKeywordQuery(query) {
+    const rawTokens = query.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}._-]*/gu) ?? [];
+    const meaningfulTokens = rawTokens.filter((token) => !ENGLISH_STOP_WORDS.has(token));
+    const tokens = meaningfulTokens.length > 0 ? meaningfulTokens : rawTokens;
+    const uniqueTokens = [...new Set(tokens)];
+    return uniqueTokens.map((token) => `"${token}"`).join(" OR ");
+}
+async function semanticSearch(queryEmbedding, limit) {
     const result = await db_js_1.db.query(`
     SELECT
       dc.id,
@@ -20,24 +62,151 @@ async function searchDocuments(query, limit = 5) {
       d.id AS document_id,
       d.name AS document_name,
       d.path AS document_path,
-
-      1 - (dc.embedding <=> $1::vector) AS score
-
+      1 - (dc.embedding <=> $1::vector) AS score,
+      0::real AS keyword_score,
+      1 - (dc.embedding <=> $1::vector) AS hybrid_score,
+      (ROW_NUMBER() OVER (
+        ORDER BY dc.embedding <=> $1::vector
+      ))::int AS vector_rank,
+      NULL::int AS keyword_rank
     FROM document_chunks dc
-
     JOIN documents d
       ON d.id = dc.document_id
-
     WHERE dc.embedding IS NOT NULL
-
     ORDER BY dc.embedding <=> $1::vector
-
     LIMIT $2
+    `, [`[${queryEmbedding.join(",")}]`, limit]);
+    return result.rows;
+}
+async function hybridSearch(queryEmbedding, keywordQuery, limit) {
+    const candidateLimit = Math.max(MIN_CANDIDATE_COUNT, Math.ceil(limit * CANDIDATE_MULTIPLIER));
+    const result = await db_js_1.db.query(`
+    WITH query_input AS (
+      SELECT
+        $1::vector AS embedding,
+        websearch_to_tsquery('simple', $2) AS keyword_query
+    ),
+    searchable_chunks AS (
+      SELECT
+        dc.id,
+        dc.content,
+        dc.chunk_index,
+        dc.embedding,
+        d.id AS document_id,
+        d.name AS document_name,
+        d.path AS document_path,
+        setweight(
+          to_tsvector('simple', COALESCE(d.name, '')),
+          'A'
+        ) ||
+        setweight(
+          to_tsvector('simple', COALESCE(d.path, '')),
+          'A'
+        ) ||
+        setweight(
+          to_tsvector('simple', COALESCE(dc.content, '')),
+          'B'
+        ) AS search_vector
+      FROM document_chunks dc
+      JOIN documents d
+        ON d.id = dc.document_id
+      WHERE dc.embedding IS NOT NULL
+    ),
+    vector_scored AS (
+      SELECT
+        sc.*,
+        1 - (sc.embedding <=> qi.embedding) AS vector_score
+      FROM searchable_chunks sc
+      CROSS JOIN query_input qi
+    ),
+    vector_candidates AS (
+      SELECT
+        vs.*,
+        (ROW_NUMBER() OVER (
+          ORDER BY vs.vector_score DESC
+        ))::int AS vector_rank
+      FROM vector_scored vs
+      ORDER BY vs.vector_score DESC
+      LIMIT $3
+    ),
+    keyword_scored AS (
+      SELECT
+        sc.*,
+        1 - (sc.embedding <=> qi.embedding) AS vector_score,
+        ts_rank_cd(
+          sc.search_vector,
+          qi.keyword_query,
+          32
+        ) AS keyword_score
+      FROM searchable_chunks sc
+      CROSS JOIN query_input qi
+      WHERE sc.search_vector @@ qi.keyword_query
+    ),
+    keyword_candidates AS (
+      SELECT
+        ks.*,
+        (ROW_NUMBER() OVER (
+          ORDER BY ks.keyword_score DESC, ks.vector_score DESC
+        ))::int AS keyword_rank
+      FROM keyword_scored ks
+      ORDER BY ks.keyword_score DESC, ks.vector_score DESC
+      LIMIT $3
+    ),
+    combined_candidates AS (
+      SELECT
+        COALESCE(vc.id, kc.id) AS id,
+        COALESCE(vc.content, kc.content) AS content,
+        COALESCE(vc.chunk_index, kc.chunk_index) AS chunk_index,
+        COALESCE(vc.document_id, kc.document_id) AS document_id,
+        COALESCE(vc.document_name, kc.document_name) AS document_name,
+        COALESCE(vc.document_path, kc.document_path) AS document_path,
+        COALESCE(vc.vector_score, kc.vector_score) AS vector_score,
+        COALESCE(kc.keyword_score, 0::real) AS keyword_score,
+        vc.vector_rank,
+        kc.keyword_rank
+      FROM vector_candidates vc
+      FULL OUTER JOIN keyword_candidates kc
+        ON kc.id = vc.id
+    )
+    SELECT
+      id,
+      content,
+      chunk_index,
+      document_id,
+      document_name,
+      document_path,
+      vector_score AS score,
+      keyword_score,
+      (
+        COALESCE(1.0 / ($5 + vector_rank), 0.0) +
+        COALESCE(1.0 / ($5 + keyword_rank), 0.0)
+      )::double precision AS hybrid_score,
+      vector_rank,
+      keyword_rank
+    FROM combined_candidates
+    ORDER BY hybrid_score DESC, score DESC
+    LIMIT $4
     `, [
         `[${queryEmbedding.join(",")}]`,
-        limit
+        keywordQuery,
+        candidateLimit,
+        limit,
+        RRF_K,
     ]);
     return result.rows;
+}
+/**
+ * Searches indexed chunks with semantic retrieval or hybrid RRF fusion.
+ * The default remains hybrid for API, RAG, and MCP callers.
+ *
+ * The returned `score` remains vector similarity for API compatibility.
+ */
+async function searchDocuments(query, limit = 5, mode = "hybrid") {
+    const queryEmbedding = await (0, embedding_js_1.generateEmbedding)(query);
+    if (mode === "semantic") {
+        return semanticSearch(queryEmbedding, limit);
+    }
+    return hybridSearch(queryEmbedding, buildKeywordQuery(query), limit);
 }
 /**
  * Records a semantic search or RAG question for usage reporting.

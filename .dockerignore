@@ -1,0 +1,24 @@
+.git
+.gitignore
+.next
+**/.next
+node_modules
+**/node_modules
+dist
+**/dist
+docs/generated
+*.log
+*.tsbuildinfo
+
+# Never send local environment files or secrets to the Docker build context.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Local/editor files
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+

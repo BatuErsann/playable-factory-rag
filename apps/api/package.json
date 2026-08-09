@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "mcp": "tsx src/mcp.ts",
     "seed": "tsx src/seed.ts",
+    "seed:production": "node dist/seed.js",
     "evaluate": "tsx src/evaluate.ts"
   },
   "keywords": [],

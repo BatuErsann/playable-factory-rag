@@ -8,7 +8,7 @@ The application is designed as a practical internal knowledge assistant: users c
 
 - Semantic document search backed by PostgreSQL and pgvector
 - Grounded answers with document and chunk citations
-- Markdown ingestion with per-document status and error tracking
+- Self-updating incremental ingestion with document hash and error tracking
 - OpenAI embeddings and response generation
 - HttpOnly cookie-based JWT authentication
 - `USER` and `ADMIN` role-based authorization enforced by the API
@@ -40,7 +40,9 @@ PostgreSQL + pgvector
                            with source citations
 ```
 
-During ingestion, Markdown documents from `corpus/` are split into overlapping chunks. Each chunk is embedded and stored in PostgreSQL using pgvector. Documents are marked `PENDING` while being processed, `INDEXED` after success, and `FAILED` with a readable `last_error` after failure. A failed document does not stop the remaining corpus from being indexed.
+The API automatically scans `corpus/` when it starts and at a configurable interval. SHA-256 content hashes identify new and changed Markdown files, so unchanged documents are skipped without new OpenAI calls. Files removed from the corpus are deleted from the document index, and their chunks are removed through the existing database cascade.
+
+New or changed documents are split into 800-character chunks with a 150-character overlap. Embeddings are prepared before the stored chunks are replaced in a per-document transaction. Documents are marked `PENDING` while being processed, `INDEXED` after success, and `FAILED` with a readable `last_error` after failure. A failed update keeps the previous chunk set intact and does not stop the remaining corpus from being synchronized.
 
 A question is embedded with the same model and compared with the indexed vectors. The highest-ranked chunks above the RAG similarity threshold are passed to the response model as context. If no sufficiently relevant context is available, the API returns an insufficient-information response instead of answering from general model knowledge.
 
@@ -68,6 +70,9 @@ playableFactory/
 |-- corpus/               Markdown source documents
 |-- Doxyfile              Doxygen configuration
 |-- docker-compose.yml    Local PostgreSQL/pgvector service
+|-- docker-compose.production.yml
+|                         Coolify production stack
+|-- .dockerignore         Docker build-context exclusions
 |-- AI_USAGE.md           AI-assisted development disclosure
 `-- readme.md             Project documentation
 ```
@@ -111,6 +116,8 @@ FRONTEND_URL=http://localhost:3000
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/playable_rag
 JWT_SECRET=replace-with-a-long-random-secret
 OPENAI_API_KEY=replace-with-your-openai-api-key
+AUTO_INGEST_ENABLED=true
+AUTO_INGEST_INTERVAL_MS=60000
 COOKIE_SECURE=false
 COOKIE_SAME_SITE=lax
 ```
@@ -128,7 +135,7 @@ docker cp apps/api/src/db/init.sql playable-rag-db:/tmp/init.sql
 docker compose exec db psql -U postgres -d playable_rag -f /tmp/init.sql
 ```
 
-The SQL script enables pgvector and creates the `users`, `documents`, `document_chunks`, and `search_logs` tables. It is safe to run again because its schema creation statements are idempotent. On API startup, backward-compatible migrations add newer fields such as `documents.last_error` when they are missing.
+The SQL script enables pgvector and creates the `users`, `documents`, `document_chunks`, and `search_logs` tables. It is safe to run again because its schema creation statements are idempotent. The API runs this same schema source on startup and then applies backward-compatible migrations for older databases, so a fresh database is initialized without a separate destructive migration step.
 
 ### 4. Create development users
 
@@ -158,9 +165,11 @@ npm run dev --workspace=web
 - API: [http://localhost:4000](http://localhost:4000)
 - Health check: [http://localhost:4000/health](http://localhost:4000/health)
 
-### 6. Ingest the corpus
+### 6. Manually synchronize the corpus
 
-Ingestion is restricted to authenticated administrators. The following example logs in, stores the HttpOnly session cookie in a temporary cookie jar, and starts ingestion:
+Automatic synchronization is enabled by default. `AUTO_INGEST_INTERVAL_MS` controls the polling interval and must be at least 5000 milliseconds. Set `AUTO_INGEST_ENABLED=false` to disable the scheduler.
+
+Administrators can also request an immediate incremental scan. The following example logs in, stores the HttpOnly session cookie in a temporary cookie jar, and starts synchronization:
 
 ```bash
 curl -c cookies.txt -H "Content-Type: application/json" -d '{"email":"admin@playable.com","password":"Admin123"}' http://localhost:4000/auth/login
@@ -173,14 +182,109 @@ The endpoint keeps processing after individual document failures and returns an 
 {
   "message": "Ingestion completed",
   "total": 142,
-  "succeeded": 140,
-  "failed": 2
+  "succeeded": 2,
+  "failed": 0,
+  "skipped": 140,
+  "removed": 1
 }
 ```
 
-The counts depend on the current corpus. Failed documents are available through the admin documents endpoint with `status: "FAILED"` and a `last_error` message.
+The counts depend on the changes found in the current scan. `succeeded` counts newly indexed or updated documents, `skipped` counts unchanged documents, and `removed` counts database records deleted because their source files no longer exist. Failed documents are available through the admin documents endpoint with `status: "FAILED"` and a `last_error` message.
 
 Delete `cookies.txt` after the local test because it contains an authenticated session cookie.
+
+## Production Deployment with Coolify
+
+The production stack is defined in `docker-compose.production.yml`. It builds both applications from the monorepo root, runs the API from compiled JavaScript, runs the web application with the Next.js standalone production server, packages `corpus/` in the API image, and keeps PostgreSQL data in a named volume. The database has no public host port.
+
+The production deployment uses two HTTPS subdomains under `batuhanersan.com.tr`:
+
+```text
+web -> https://app.batuhanersan.com.tr
+api -> https://api.batuhanersan.com.tr
+```
+
+Create `A` records for both subdomains pointing to the Coolify server's public IP. If IPv6 is configured, add the corresponding `AAAA` records as well. Coolify should terminate HTTPS and route each hostname to its service port.
+
+### Required production environment
+
+Configure these variables in the Coolify Docker Compose resource. Do not commit a production `.env` file.
+
+Database service:
+
+```dotenv
+POSTGRES_USER=playable
+POSTGRES_PASSWORD=<strong-random-database-password>
+POSTGRES_DB=playable_rag
+```
+
+API service:
+
+```dotenv
+PORT=4000
+NODE_ENV=production
+DATABASE_URL=postgresql://playable:<URL-encoded-database-password>@db:5432/playable_rag
+OPENAI_API_KEY=<OpenAI-API-key>
+JWT_SECRET=<long-random-JWT-secret>
+FRONTEND_URL=https://app.batuhanersan.com.tr
+COOKIE_SECURE=true
+COOKIE_SAME_SITE=lax
+CORPUS_PATH=/app/corpus
+AUTO_INGEST_ENABLED=true
+AUTO_INGEST_INTERVAL_MS=60000
+SEED_ADMIN_USERNAME=production-admin
+SEED_ADMIN_EMAIL=<initial-admin-email>
+SEED_ADMIN_PASSWORD=<initial-admin-password-with-at-least-12-characters>
+```
+
+Web build:
+
+```dotenv
+NEXT_PUBLIC_API_URL=https://api.batuhanersan.com.tr
+```
+
+`DATABASE_URL` must use the Compose hostname `db`; URL-encode special characters in its password. `NEXT_PUBLIC_API_URL` is public browser configuration, not a secret, and must be available during the image build because Next.js embeds `NEXT_PUBLIC_*` values in the client bundle. In Coolify, leave its Build Variable option enabled. Secrets such as `OPENAI_API_KEY`, `JWT_SECRET`, database credentials, and the seed password are runtime-only and do not need to be build variables.
+
+`COOKIE_DOMAIN` is intentionally omitted. The API cookie only needs to be sent to the API host, so a host-only cookie is sufficient and safer.
+
+### Deploy from a private GitHub repository
+
+1. In Coolify, configure a GitHub App or deploy key with access only to the private repository.
+2. Create a new resource from that private repository and select the Docker Compose build pack.
+3. Set the Compose file to `/docker-compose.production.yml` and let Coolify load the three services.
+4. In DNS, point `app.batuhanersan.com.tr` and `api.batuhanersan.com.tr` to the Coolify server.
+5. Assign `https://app.batuhanersan.com.tr` to `web` on container port `3000` and `https://api.batuhanersan.com.tr` to `api` on container port `4000`.
+6. Set the production variables shown above. Do not use a wildcard for `FRONTEND_URL`.
+7. Deploy the stack and wait for Coolify to issue valid HTTPS certificates.
+8. Confirm that `https://api.batuhanersan.com.tr/health` returns `status: "ok"`.
+
+The production Compose defaults already contain these hostnames, so URL discovery and a second deployment are no longer required. If either hostname changes, update `FRONTEND_URL` and the build-time `NEXT_PUBLIC_API_URL`, then rebuild/redeploy.
+
+### Cookie behavior
+
+The web and API subdomains share the same parent site, so production uses `COOKIE_SAME_SITE=lax` with `COOKIE_SECURE=true`. Frontend requests still use `credentials: "include"`, CORS accepts only `https://app.batuhanersan.com.tr`, and the backend remains the authorization boundary.
+
+### Initialize and verify production data
+
+The API applies `apps/api/src/db/init.sql` during startup. This enables pgvector and creates all current tables and ingestion fields without deleting existing data. Schema statements and compatibility migrations are idempotent, while the named database volume survives image rebuilds and service redeployments.
+
+Do not run the seed automatically at startup. After the production variables are present, open a terminal for the deployed `api` service and run:
+
+```bash
+npm run seed:production
+```
+
+Production seeding requires `SEED_ADMIN_EMAIL` and a `SEED_ADMIN_PASSWORD` of at least 12 characters; it does not use the local demo credentials. After seeding, sign in with that administrator, change the password if appropriate, and trigger ingestion from the dashboard. The seed password can then be removed from Coolify and the API redeployed.
+
+Verify the deployment in this order:
+
+- API `/health` reports a connected database.
+- Login returns success and the browser stores `playable_factory_token` as an HttpOnly cookie.
+- Refresh restores the session through `/auth/profile`.
+- Chat returns grounded answers and citations.
+- The Admin dashboard loads statistics and document state.
+- Admin ingestion indexes the packaged corpus.
+- A normal `USER` receives `403` from admin endpoints.
 
 ## Authentication and Authorization
 
@@ -207,7 +311,7 @@ For production deployments on different sites, use HTTPS and configure `FRONTEND
 | `POST` | `/auth/change-password` | Authenticated | Change the current user's password |
 | `POST` | `/search` | `USER`, `ADMIN` | Return semantically similar chunks |
 | `POST` | `/ask` | `USER`, `ADMIN` | Return a grounded answer and citations |
-| `POST` | `/ingest` | `ADMIN` | Index the corpus and return success/failure counts |
+| `POST` | `/ingest` | `ADMIN` | Run an immediate incremental corpus synchronization |
 | `GET` | `/admin/stats` | `ADMIN` | Return corpus and search statistics |
 | `GET` | `/admin/documents` | `ADMIN` | List documents, status, chunk counts, and `last_error` |
 | `GET` | `/admin/search-logs` | `ADMIN` | Return the 20 most recent search records |
@@ -262,6 +366,8 @@ Useful runtime checks include:
 - Unauthenticated protected requests return `401`.
 - A `USER` can use `/search` and `/ask` but receives `403` for admin routes.
 - An `ADMIN` can ingest documents and access administration data.
+- A second corpus sync skips unchanged documents without regenerating embeddings.
+- New, changed, and removed files are reflected by the next automatic scan.
 - Indexed chunks contain 1536-dimensional embeddings.
 - Corpus-backed questions return citations, while unrelated questions return an insufficient-information response.
 - MCP semantic results match the shared HTTP search behavior.

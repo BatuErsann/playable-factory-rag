@@ -189,6 +189,7 @@ app.post("/ask", auth_js_1.requireAuth, (0, auth_js_1.requireRole)("USER", "ADMI
 });
 async function startServer() {
     await (0, init_js_1.initializeDatabase)();
+    (0, ingest_js_1.startAutomaticIngestion)();
     app.listen(PORT, () => {
         console.log(`API running on http://localhost:${PORT}`);
     });
