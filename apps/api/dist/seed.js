@@ -7,16 +7,40 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const db_js_1 = require("./db.js");
 const init_js_1 = require("./db/init.js");
 function productionSeedUsers() {
-    const username = process.env.SEED_ADMIN_USERNAME?.trim() || "production-admin";
-    const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
-    const password = process.env.SEED_ADMIN_PASSWORD;
-    if (!email || !password) {
+    const adminUsername = process.env.SEED_ADMIN_USERNAME?.trim() || "production-admin";
+    const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+    if (!adminEmail || !adminPassword) {
         throw new Error("SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are required for production seeding");
     }
-    if (password.length < 12) {
+    if (adminPassword.length < 12) {
         throw new Error("SEED_ADMIN_PASSWORD must contain at least 12 characters");
     }
-    return [{ username, email, password, role: "ADMIN" }];
+    const users = [
+        {
+            username: adminUsername,
+            email: adminEmail,
+            password: adminPassword,
+            role: "ADMIN",
+        },
+    ];
+    const userEmail = process.env.SEED_USER_EMAIL?.trim().toLowerCase();
+    const userPassword = process.env.SEED_USER_PASSWORD;
+    if (userEmail || userPassword) {
+        if (!userEmail || !userPassword) {
+            throw new Error("SEED_USER_EMAIL and SEED_USER_PASSWORD must be set together");
+        }
+        if (userPassword.length < 12) {
+            throw new Error("SEED_USER_PASSWORD must contain at least 12 characters");
+        }
+        users.push({
+            username: process.env.SEED_USER_USERNAME?.trim() || "production-user",
+            email: userEmail,
+            password: userPassword,
+            role: "USER",
+        });
+    }
+    return users;
 }
 async function seed() {
     await (0, init_js_1.initializeDatabase)();

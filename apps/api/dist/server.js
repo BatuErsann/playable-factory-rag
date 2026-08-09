@@ -6,9 +6,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const node_crypto_1 = require("node:crypto");
+const server_1 = require("@modelcontextprotocol/server");
 const db_js_1 = require("./db.js");
 const auth_js_1 = require("./auth.js");
 const init_js_1 = require("./db/init.js");
+const mcp_server_js_1 = require("./mcp-server.js");
 const ingest_js_1 = require("./ingest.js");
 const search_js_1 = require("./search.js");
 const rag_js_1 = require("./rag.js");
@@ -29,6 +32,51 @@ app.use((0, cors_1.default)({
 }));
 app.use(express_1.default.json());
 app.use("/auth", auth_js_1.authRouter);
+const mcpHandler = (0, server_1.createMcpHandler)(() => (0, mcp_server_js_1.createMcpServer)(), {
+    responseMode: "json",
+});
+function hasValidMcpApiKey(authorization) {
+    const expectedKey = process.env.MCP_API_KEY;
+    if (!expectedKey || !authorization?.startsWith("Bearer ")) {
+        return false;
+    }
+    const suppliedKey = authorization.slice("Bearer ".length);
+    const expectedBuffer = Buffer.from(expectedKey);
+    const suppliedBuffer = Buffer.from(suppliedKey);
+    return (expectedBuffer.length === suppliedBuffer.length &&
+        (0, node_crypto_1.timingSafeEqual)(expectedBuffer, suppliedBuffer));
+}
+app.all("/mcp", async (req, res) => {
+    const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+    const origin = req.get("origin");
+    if (origin && !allowedOrigins.includes(origin)) {
+        res.status(403).json({ message: "MCP origin is not allowed" });
+        return;
+    }
+    if (!hasValidMcpApiKey(req.get("authorization"))) {
+        res.status(401).set("WWW-Authenticate", "Bearer").json({
+            message: "A valid MCP API key is required",
+        });
+        return;
+    }
+    const headers = new Headers();
+    for (const [name, value] of Object.entries(req.headers)) {
+        if (value) {
+            headers.set(name, Array.isArray(value) ? value.join(",") : value);
+        }
+    }
+    const methodHasBody = ["POST", "PUT", "PATCH"].includes(req.method);
+    const response = await mcpHandler.fetch(new Request(`https://${req.get("host")}${req.originalUrl}`, {
+        method: req.method,
+        headers,
+        body: methodHasBody ? JSON.stringify(req.body) : undefined,
+    }));
+    response.headers.forEach((value, name) => res.set(name, value));
+    res.status(response.status).send(Buffer.from(await response.arrayBuffer()));
+});
 // GET routes
 app.get("/health", async (_req, res) => {
     try {

@@ -86,9 +86,7 @@ export function LoginForm() {
             aria-invalid={Boolean(error)}
             className="h-[59px] w-full rounded-lg border border-[#70a0c8] bg-[#35435e] px-5 text-sm text-white outline-none transition placeholder:font-semibold placeholder:text-[#aab6cc] hover:border-[#8ab6da] focus:border-[#9bc7ea] focus:ring-2 focus:ring-[#6f9fc8]/25 disabled:cursor-not-allowed disabled:opacity-60"
           />
-          <p className="mt-7 text-right text-[13px] font-medium text-[#a9b1c1]">
-            Forgot password?
-          </p>
+       
         </div>
 
         {error && (
