@@ -146,7 +146,7 @@ export default function ChatPage() {
                   What can I help you find?
                 </h1>
 
-                <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-white/45">
+                <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-white/70">
                   Ask questions about the indexed corpus and get grounded
                   answers with citations to the source documents.
                 </p>
@@ -157,7 +157,7 @@ export default function ChatPage() {
                       key={suggestion}
                       type="button"
                       onClick={() => useSuggestion(suggestion)}
-                      className="rounded-full border border-white/[0.09] bg-white/[0.035] px-3.5 py-2 text-xs text-white/48 transition hover:bg-white/[0.07] hover:text-white/70"
+                      className="rounded-full border border-white/[0.09] bg-white/[0.035] px-3.5 py-2 text-xs text-white/70 transition hover:bg-white/[0.07] hover:text-white/90"
                     >
                       {suggestion}
                     </button>
@@ -177,7 +177,7 @@ export default function ChatPage() {
             {isLoading && (
               <div className="flex justify-start">
                 <div className="rounded-2xl rounded-bl-md border border-white/[0.08] bg-white/[0.035] px-5 py-4">
-                  <p className="text-sm text-white/50">
+                  <p className="text-sm text-white/70">
                     Searching the corpus...
                   </p>
                 </div>
@@ -187,19 +187,19 @@ export default function ChatPage() {
             {answer && !isLoading && (
               <div className="flex justify-start">
                 <div className="w-full max-w-[90%]">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/30">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/55">
                     Playable Factory AI
                   </p>
 
                   <div className="rounded-2xl rounded-bl-md border border-white/[0.08] bg-white/[0.035] p-6">
-                    <p className="whitespace-pre-wrap text-sm leading-7 text-white/75">
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-white/90">
                       {answer}
                     </p>
                   </div>
 
                   {citations.length > 0 && (
                     <div className="mt-5">
-                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/30">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/55">
                         Sources
                       </p>
 
@@ -211,26 +211,26 @@ export default function ChatPage() {
                           >
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <p className="text-sm font-medium text-white/80">
+                                <p className="text-sm font-medium text-white/90">
                                   [{citation.id}] {citation.documentName}
                                 </p>
 
-                                <p className="mt-1 break-all text-xs text-white/35">
+                                <p className="mt-1 break-all text-xs text-white/55">
                                   {citation.documentPath}
                                 </p>
                               </div>
 
-                              <span className="shrink-0 rounded-full border border-white/[0.08] px-2.5 py-1 text-[10px] text-white/40">
+                              <span className="shrink-0 rounded-full border border-white/[0.08] px-2.5 py-1 text-[10px] text-white/60">
                                 {citation.score.toFixed(3)}
                               </span>
                             </div>
 
                             <div className="mt-4 rounded-lg border border-white/[0.06] bg-black/10 p-3">
-                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                                 Relevant passage
                               </p>
 
-                              <p className="whitespace-pre-wrap text-xs leading-6 text-white/55">
+                              <p className="whitespace-pre-wrap text-xs leading-6 text-white/80">
                                 <HighlightedPassage
                                   passage={citation.passage}
                                   question={submittedQuestion}
@@ -238,7 +238,7 @@ export default function ChatPage() {
                               </p>
                             </div>
 
-                            <p className="mt-3 text-[10px] text-white/30">
+                            <p className="mt-3 text-[10px] text-white/50">
                               Chunk {citation.chunkIndex}
                             </p>
                           </div>
@@ -269,7 +269,7 @@ export default function ChatPage() {
               placeholder="Ask a question about your corpus…"
               rows={1}
               disabled={isLoading}
-              className="min-h-11 flex-1 resize-none bg-transparent py-3 text-sm text-white outline-none placeholder:text-white/32 disabled:opacity-60"
+              className="min-h-11 flex-1 resize-none bg-transparent py-3 text-sm text-white outline-none placeholder:text-white/50 disabled:opacity-60"
             />
 
             <button
@@ -299,7 +299,7 @@ export default function ChatPage() {
             </button>
           </form>
 
-          <p className="mt-2 text-center text-[10px] text-white/22">
+          <p className="mt-2 text-center text-[10px] text-white/40">
             Grounded answers can still make mistakes. Verify important details.
           </p>
         </div>
