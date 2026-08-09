@@ -143,7 +143,14 @@ The SQL script enables pgvector and creates the `users`, `documents`, `document_
 npm run seed --workspace=api
 ```
 
-The seed command creates local `USER` and `ADMIN` accounts for development. Review or replace the demo credentials in `apps/api/src/seed.ts` before using the application outside a local environment.
+The seed command creates these local accounts for development:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| `USER` | `user@playable.com` | `useruser1234` |
+| `ADMIN` | `admin@playable.com` | `adminadmin123` |
+
+These credentials are only for local development. Replace them before using the application outside a local environment.
 
 ### 5. Start the application
 
@@ -238,6 +245,8 @@ SEED_ADMIN_PASSWORD=<initial-admin-password-with-at-least-12-characters>
 SEED_USER_USERNAME=production-user
 SEED_USER_EMAIL=<optional-initial-user-email>
 SEED_USER_PASSWORD=<optional-initial-user-password-with-at-least-12-characters>
+MCP_API_KEY=<strong-random-mcp-api-key>
+MCP_ALLOWED_ORIGINS=<optional-comma-separated-browser-origins>
 ```
 
 Web build:

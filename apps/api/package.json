@@ -9,7 +9,8 @@
     "mcp": "tsx src/mcp.ts",
     "seed": "tsx src/seed.ts",
     "seed:production": "node dist/seed.js",
-    "evaluate": "tsx src/evaluate.ts"
+    "evaluate": "tsx src/evaluate.ts",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "keywords": [],
   "author": "",
