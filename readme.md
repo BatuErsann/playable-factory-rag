@@ -350,6 +350,60 @@ If a browser-originated client is used, set `MCP_ALLOWED_ORIGINS` to its exact,
 comma-separated origins; requests that include an unapproved `Origin` header
 are rejected.
 
+#### Coolify and VS Code Codex setup
+
+1. Generate a strong MCP key locally. In Windows PowerShell:
+
+   ```powershell
+   $bytes = New-Object byte[] 32; $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider; $rng.GetBytes($bytes); [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+   ```
+
+2. In the **API** application's Coolify environment variables, add the generated value:
+
+   ```dotenv
+   MCP_API_KEY=<generated-secret>
+   ```
+
+   Enable it at runtime only. Do **not** enable the Build Variable option.
+   Deploy the API after the MCP code is present on the selected Git branch.
+
+3. Verify that the route is live. A deliberately invalid key must return `401`,
+   not `404`:
+
+   ```powershell
+   curl.exe -i https://api.batuhanersan.com.tr/mcp -H "Authorization: Bearer invalid"
+   ```
+
+   `/mcp` is an MCP protocol endpoint, not a browser page, so do not use a
+   browser visit as the success check.
+
+4. To connect the VS Code Codex extension, create or edit this local file:
+
+   ```text
+   C:\Users\<Windows-user>\.codex\.env
+   ```
+
+   Add the key without committing this file to Git:
+
+   ```dotenv
+   PLAYABLE_MCP_API_KEY=<the-same-generated-secret>
+   ```
+
+5. In PowerShell, locate the Codex executable bundled with the VS Code extension
+   and register the remote MCP server:
+
+   ```powershell
+   $codex = Get-ChildItem "$env:USERPROFILE\.vscode\extensions\openai.chatgpt-*-win32-x64\bin\windows-x86_64\codex.exe" | Sort-Object LastWriteTime | Select-Object -Last 1 -ExpandProperty FullName
+   & $codex mcp add playable-factory --url https://api.batuhanersan.com.tr/mcp --bearer-token-env-var PLAYABLE_MCP_API_KEY
+   & $codex mcp list
+   ```
+
+   The final command should list `playable-factory` as `enabled` with `Bearer token` authentication.
+
+6. Completely restart VS Code, start a new Codex conversation, and ask a question
+   about the Playable Factory corpus. Codex can use the `search_documents` tool
+   through the remote MCP server.
+
 ## Doxygen Documentation
 
 The repository includes a `Doxyfile` configured for the TypeScript and TSX source files. The README is used as the documentation landing page, and the generated reference includes the backend services and reusable frontend modules.
