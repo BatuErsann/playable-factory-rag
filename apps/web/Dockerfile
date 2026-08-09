@@ -12,7 +12,7 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN npm ci \
     && ARCH="$(node -p 'process.arch')" \
     && NEXT_VERSION="$(node -p 'require("./node_modules/next/package.json").version')" \
-    && LIGHTNINGCSS_VERSION="$(node -p 'require("./node_modules/lightningcss/package.json").version')" \
+    && LIGHTNINGCSS_VERSION="$(node -p 'require("./package-lock.json").packages["node_modules/lightningcss"].version')" \
     && npm install --no-save --package-lock=false \
       "@next/swc-linux-${ARCH}-musl@${NEXT_VERSION}" \
       "lightningcss-linux-${ARCH}-musl@${LIGHTNINGCSS_VERSION}"
